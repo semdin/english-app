@@ -8,8 +8,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { supabase } from "../lib/supabase"; // Import Supabase client
 
 export default function GameScreen() {
   // Use useLocalSearchParams to get the parameters
@@ -19,14 +19,14 @@ export default function GameScreen() {
   interface Word {
     id: number;
     word: string;
-    description: string; // Added description here
+    description: string;
   }
 
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [wordInput, setWordInput] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false); // New state variable
+  const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
 
   interface ExampleSentence {
     sentence: string;
@@ -37,66 +37,132 @@ export default function GameScreen() {
   );
   const [loading, setLoading] = useState(true);
 
-  const backendUrl = "https://english-app-backend-o83c.onrender.com"; // Update with your backend URL
-
+  // Fetch words for the selected category and load the user progress
   useEffect(() => {
     if (categoryId) {
-      // Fetch words for the selected category
-      axios
-        .get(`${backendUrl}/api/words/${categoryId}`)
-        .then((response) => {
-          setWords(response.data);
+      const fetchWordsAndProgress = async () => {
+        setLoading(true);
+        try {
+          // Step 1: Fetch word_ids from word_categories where category_id matches
+          const { data: wordCategoryData, error: wordCategoryError } =
+            await supabase
+              .from("word_categories")
+              .select("word_id")
+              .eq("category_id", categoryId);
+
+          if (wordCategoryError) throw wordCategoryError;
+
+          const wordIds = wordCategoryData.map((item: any) => item.word_id);
+
+          if (wordIds.length === 0) {
+            throw new Error("No words found for this category.");
+          }
+
+          // Step 2: Fetch words from the 'words' table using the word_ids
+          const { data: wordData, error: wordError } = await supabase
+            .from("words")
+            .select("id, word, description")
+            .in("id", wordIds); // Fetch words with the matching word_ids
+
+          if (wordError) throw wordError;
+
+          setWords(wordData || []);
+
+          // Fetch user progress to load the last word the user guessed
+          const { data: progressData, error: progressError } = await supabase
+            .from("user_progress")
+            .select("last_word_id")
+            .eq("category_id", categoryId)
+            .single();
+
+          if (progressError) throw progressError;
+
+          if (progressData && progressData.last_word_id) {
+            // Set the current word index based on the user's last word progress
+            const lastWordIndex = wordData.findIndex(
+              (word: Word) => word.id === progressData.last_word_id
+            );
+            if (lastWordIndex !== -1) {
+              setCurrentWordIndex(lastWordIndex + 1); // Start from the next word
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          Alert.alert("Error", "Unable to fetch words or progress.");
+        } finally {
           setLoading(false);
-        })
-        .catch((error) => {
-          console.error("Error fetching words:", error);
-          setLoading(false);
-          Alert.alert("Error", "Unable to fetch words. Please try again.");
-        });
+        }
+      };
+
+      fetchWordsAndProgress();
     }
   }, [categoryId]);
 
+  // Fetch example sentences
+  const fetchExampleSentences = async (wordId: number) => {
+    try {
+      const { data: sentenceData, error: sentenceError } = await supabase
+        .from("example_sentences")
+        .select("sentence")
+        .eq("word_id", wordId);
+
+      if (sentenceError) throw sentenceError;
+
+      setExampleSentences(sentenceData || []);
+    } catch (error) {
+      console.error("Error fetching example sentences:", error);
+    }
+  };
+
+  // Check if the guessed word is correct
   const checkWord = () => {
     const currentWord = words[currentWordIndex];
     if (wordInput.trim().toLowerCase() === currentWord.word.toLowerCase()) {
       setFeedbackMessage("Correct! Well done.");
-      setWordGuessedCorrectly(true); // Set to true when guessed correctly
+      setWordGuessedCorrectly(true);
 
-      // Fetch example sentences
-      axios
-        .get(`${backendUrl}/api/examples/${currentWord.id}/${categoryId}`)
-        .then((response) => {
-          setExampleSentences(response.data);
-        })
-        .catch((error) => {
-          console.error("Error fetching examples:", error);
-        });
+      // Fetch example sentences for the current word
+      fetchExampleSentences(currentWord.id);
 
-      // Save user progress
-      axios.post(`${backendUrl}/api/user-progress`, {
-        categoryId: categoryId,
-        lastWordId: currentWord.id,
-      });
+      // Update user progress in Supabase
+      updateUserProgress(currentWord.id);
     } else {
       setFeedbackMessage("Oops, try again.");
       setExampleSentences([]);
     }
   };
 
+  // Update user progress in Supabase
+  const updateUserProgress = async (lastWordId: number) => {
+    try {
+      const { error: updateError } = await supabase
+        .from("user_progress")
+        .upsert({
+          user_id: (await supabase.auth.getSession()).data.session?.user.id,
+          category_id: categoryId,
+          last_word_id: lastWordId,
+        });
+
+      if (updateError) throw updateError;
+    } catch (error) {
+      console.error("Error updating user progress:", error);
+    }
+  };
+
+  // Navigate to the next word
   const nextWord = () => {
     if (currentWordIndex + 1 < words.length) {
       setCurrentWordIndex(currentWordIndex + 1);
       setWordInput("");
       setFeedbackMessage("");
       setExampleSentences([]);
-      setWordGuessedCorrectly(false); // Reset for the next word
+      setWordGuessedCorrectly(false);
     } else {
       Alert.alert(
         "Congratulations!",
         "You have completed all words in this category."
       );
-      // navigate back to the categories screen or reset the game state
-      router.push("/"); // Navigate to the Category Selection screen
+      router.push("/"); // Navigate back to the Category Selection screen
     }
   };
 
@@ -178,7 +244,6 @@ export default function GameScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... existing styles ...
   container: {
     flex: 1,
     padding: 16,
@@ -193,7 +258,7 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 18,
     fontStyle: "italic",
-    color: "#6b7280", // Grey color for description
+    color: "#6b7280",
     textAlign: "center",
     marginBottom: 24,
   },

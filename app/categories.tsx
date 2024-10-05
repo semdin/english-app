@@ -1,4 +1,3 @@
-// categories.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -8,48 +7,148 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
-import axios from "axios";
 import { useRouter } from "expo-router";
-import { MaterialIcons } from "@expo/vector-icons"; // Assuming you are using MaterialIcons
+import { MaterialIcons } from "@expo/vector-icons";
+import { supabase } from "../lib/supabase"; // Import supabase
 
 export default function CategoriesScreen() {
   interface Category {
     id: number;
     name: string;
-    icon: string; // Icon name fetched from the backend
+    icon: string;
+  }
+
+  interface UserProgress {
+    category_id: number;
+    completed_count: number;
+    total_words: number;
   }
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProgress, setUserProgress] = useState<{
+    [key: number]: UserProgress;
+  }>({});
   const router = useRouter();
 
-  const backendUrl = "https://english-app-backend-o83c.onrender.com"; // Update with your backend URL
-
+  // Fetch categories from Supabase
   useEffect(() => {
-    axios
-      .get(`${backendUrl}/api/categories`)
-      .then((response) => {
-        setCategories(response.data);
+    const fetchCategories = async () => {
+      try {
+        const { data: categoryData, error: categoryError } = await supabase
+          .from("categories")
+          .select("*");
+
+        if (categoryError) {
+          console.error("Error fetching categories:", categoryError);
+          return;
+        }
+        setCategories(categoryData || []);
         setLoading(false);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Error fetching categories:", error);
         setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  const fetchUserProgressAndWordCounts = async (userId: string) => {
+    try {
+      // 1. Fetch word counts for all categories from word_categories
+      const { data: categoryWordCounts, error: wordCountError } = await supabase
+        .from("word_categories")
+        .select("category_id, word_id");
+
+      if (wordCountError) {
+        console.error(
+          "Error fetching word counts for categories:",
+          wordCountError
+        );
+        return;
+      }
+
+      // Create a map to store the total number of words per category
+      const categoryWordCountMap: { [key: number]: number } = {};
+
+      categoryWordCounts.forEach((item: { category_id: number }) => {
+        if (!categoryWordCountMap[item.category_id]) {
+          categoryWordCountMap[item.category_id] = 1;
+        } else {
+          categoryWordCountMap[item.category_id] += 1;
+        }
       });
+
+      // 2. Fetch user progress
+      const { data: userProgressData, error: userProgressError } =
+        await supabase
+          .from("user_progress")
+          .select("category_id, last_word_id")
+          .eq("user_id", userId);
+
+      if (userProgressError) {
+        console.error("Error fetching user progress:", userProgressError);
+        return;
+      }
+
+      const progressData: { [key: number]: UserProgress } = {};
+
+      // 3. Merge user progress with word counts
+      userProgressData.forEach((progress: any) => {
+        const completed_count = progress.last_word_id
+          ? progress.last_word_id
+          : 0;
+        const total_words = categoryWordCountMap[progress.category_id] || 0;
+
+        progressData[progress.category_id] = {
+          category_id: progress.category_id,
+          completed_count,
+          total_words, // Use the word count from the word_categories table
+        };
+      });
+
+      // 4. Ensure that all categories have their word count even if there's no user progress
+      Object.keys(categoryWordCountMap).forEach((categoryId) => {
+        const id = parseInt(categoryId); // Convert categoryId from string to number
+        if (!progressData[id]) {
+          progressData[id] = {
+            category_id: id,
+            completed_count: 0, // No progress
+            total_words: categoryWordCountMap[id], // Word count for the category
+          };
+        }
+      });
+
+      setUserProgress(progressData);
+    } catch (error) {
+      console.error("Error fetching user progress and word counts:", error);
+    }
+  };
+
+  // Fetch categories and user progress
+  useEffect(() => {
+    const getUserSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        fetchUserProgressAndWordCounts(session.user.id);
+      }
+    };
+    getUserSession();
   }, []);
 
   const selectCategory = (categoryId: number, categoryName: string) => {
-    // Navigate to the game screen with the selected category
     router.push({
       pathname: "/game",
       params: { categoryId, categoryName },
     });
   };
 
-  // Ensure icons are properly rendered
   const renderIcon = (iconName: string) => {
     if (!iconName) {
-      return null; // If no icon name is provided, return null
+      return null;
     }
     return (
       <MaterialIcons
@@ -74,18 +173,26 @@ export default function CategoriesScreen() {
       <FlatList
         data={categories}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <Pressable
-            style={styles.categoryButton}
-            onPress={() => selectCategory(item.id, item.name)}
-          >
-            {renderIcon(item.icon)}
-            <Text style={styles.categoryButtonText}>{item.name}</Text>
-          </Pressable>
-        )}
-        numColumns={2} // Display 2 categories per row
+        renderItem={({ item }) => {
+          const progress = userProgress[item.id];
+          const progressText = progress
+            ? `${progress.completed_count}/${progress.total_words}`
+            : "0/0"; // Default if no progress found
+
+          return (
+            <Pressable
+              style={styles.categoryButton}
+              onPress={() => selectCategory(item.id, item.name)}
+            >
+              {renderIcon(item.icon)}
+              <Text style={styles.categoryButtonText}>{item.name}</Text>
+              <Text style={styles.progressText}>{progressText}</Text>
+            </Pressable>
+          );
+        }}
+        numColumns={2}
         contentContainerStyle={styles.listContainer}
-        columnWrapperStyle={styles.row} // Align items in the row
+        columnWrapperStyle={styles.row}
       />
     </View>
   );
@@ -107,24 +214,30 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   row: {
-    justifyContent: "space-between", // Distribute buttons evenly in a row
-    marginBottom: 16, // Space between rows
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
   categoryButton: {
     backgroundColor: "#1e40af",
     flex: 1,
-    margin: 8, // Add margin for spacing
+    margin: 8,
     paddingVertical: 16,
     paddingHorizontal: 12,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row", // Align icon and text in the same row
+    flexDirection: "column",
   },
   categoryButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-    marginLeft: 8, // Space between icon and text
+    marginTop: 8,
+  },
+  progressText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "400",
+    marginTop: 4,
   },
 });

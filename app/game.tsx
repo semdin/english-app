@@ -12,7 +12,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase"; // Import Supabase client
 
 export default function GameScreen() {
-  // Use useLocalSearchParams to get the parameters
   const { categoryId, categoryName } = useLocalSearchParams();
   const router = useRouter();
 
@@ -73,7 +72,7 @@ export default function GameScreen() {
             .from("user_progress")
             .select("last_word_id")
             .eq("category_id", categoryId)
-            .single();
+            .maybeSingle(); // Use maybeSingle() to avoid errors when no progress exists
 
           if (progressError) throw progressError;
 
@@ -135,15 +134,41 @@ export default function GameScreen() {
   // Update user progress in Supabase
   const updateUserProgress = async (lastWordId: number) => {
     try {
-      const { error: updateError } = await supabase
-        .from("user_progress")
-        .upsert({
-          user_id: (await supabase.auth.getSession()).data.session?.user.id,
-          category_id: categoryId,
-          last_word_id: lastWordId,
-        });
+      const userId = (await supabase.auth.getSession()).data.session?.user.id;
 
-      if (updateError) throw updateError;
+      // First, check if the progress record exists
+      const { data: progressData, error: progressFetchError } = await supabase
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("category_id", categoryId)
+        .single(); // Fetch the existing progress record
+
+      if (progressFetchError && progressFetchError.code !== "PGRST116") {
+        throw progressFetchError;
+      }
+
+      if (progressData) {
+        // If progress exists, update the last_word_id
+        const { error: updateError } = await supabase
+          .from("user_progress")
+          .update({ last_word_id: lastWordId })
+          .eq("user_id", userId)
+          .eq("category_id", categoryId);
+
+        if (updateError) throw updateError;
+      } else {
+        // If no progress exists, insert a new progress record
+        const { error: insertError } = await supabase
+          .from("user_progress")
+          .insert({
+            user_id: userId,
+            category_id: categoryId,
+            last_word_id: lastWordId,
+          });
+
+        if (insertError) throw insertError;
+      }
     } catch (error) {
       console.error("Error updating user progress:", error);
     }

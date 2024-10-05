@@ -38,6 +38,11 @@ export default function StartGameScreen() {
     router.push("/categories"); // Kategori seçim ekranına yönlendir
   };
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null); // Kullanıcıyı null yaparak oturumu sıfırla
+  };
+
   return (
     <View style={styles.container}>
       {/* Logo / Illustration */}
@@ -52,26 +57,34 @@ export default function StartGameScreen() {
 
       {/* Subtitle */}
       <Text style={styles.subtitle}>
-        Test your vocabulary! Tap below to start.
+        Test your vocabulary! Sign in to start.
       </Text>
 
-      {/* Start Button */}
-      <Pressable style={styles.button} onPress={startGame}>
-        <Text style={styles.buttonText}>Start Game</Text>
-      </Pressable>
-
       {user ? (
-        <View style={styles.userInfo}>
-          {/* Kullanıcı profil fotoğrafı */}
-          <Image
-            source={{ uri: user?.user_metadata?.avatar_url }} // Supabase'deki user_metadata'den avatar url alınıyor
-            style={styles.profileImage}
-          />
-          {/* Welcome mesajı */}
-          <Text style={styles.welcomeText}>
-            Welcome, {user?.user_metadata?.full_name || "User"}!
-          </Text>
-        </View>
+        <>
+          {/* Start Button - Only visible if user is logged in */}
+          <Pressable style={styles.button} onPress={startGame}>
+            <Text style={styles.buttonText}>Start Game</Text>
+          </Pressable>
+
+          {/* User Information */}
+          <View style={styles.userInfo}>
+            {/* Kullanıcı profil fotoğrafı */}
+            <Image
+              source={{ uri: user?.user_metadata?.avatar_url }} // Supabase'deki user_metadata'den avatar url alınıyor
+              style={styles.profileImage}
+            />
+            {/* Welcome mesajı */}
+            <Text style={styles.welcomeText}>
+              Welcome, {user?.user_metadata?.full_name || "User"}!
+            </Text>
+
+            {/* Sign Out Button */}
+            <Pressable style={styles.signOutButton} onPress={signOut}>
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </Pressable>
+          </View>
+        </>
       ) : (
         <>
           {/* Google Sign In */}
@@ -141,5 +154,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#000",
     fontWeight: "600",
+  },
+  signOutButton: {
+    marginTop: 16,
+    backgroundColor: "#ef4444",
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 9999,
+  },
+  signOutText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

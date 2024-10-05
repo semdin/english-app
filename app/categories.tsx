@@ -71,7 +71,6 @@ export default function CategoriesScreen() {
 
       // Create a map to store the total number of words per category
       const categoryWordCountMap: { [key: number]: number } = {};
-
       categoryWordCounts.forEach((item: { category_id: number }) => {
         if (!categoryWordCountMap[item.category_id]) {
           categoryWordCountMap[item.category_id] = 1;
@@ -94,12 +93,17 @@ export default function CategoriesScreen() {
 
       const progressData: { [key: number]: UserProgress } = {};
 
-      // 3. Merge user progress with word counts
+      // 3. Calculate the completed count for each category
       userProgressData.forEach((progress: any) => {
-        const completed_count = progress.last_word_id
-          ? progress.last_word_id
-          : 0;
+        const last_word_id = progress.last_word_id;
         const total_words = categoryWordCountMap[progress.category_id] || 0;
+
+        // Count how many words have been completed by comparing word_id <= last_word_id
+        const completed_count = categoryWordCounts.filter(
+          (item) =>
+            item.category_id === progress.category_id &&
+            item.word_id <= last_word_id
+        ).length;
 
         progressData[progress.category_id] = {
           category_id: progress.category_id,

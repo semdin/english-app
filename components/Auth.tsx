@@ -10,6 +10,8 @@ export default function Auth() {
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
     webClientId:
       "691183788881-ihsl30r4rhqejj61a84g80fofgt7cv3n.apps.googleusercontent.com", // Bunu Google Console'dan aldığınız client ID ile değiştirmelisiniz
+    iosClientId:
+      "691183788881-nv7eq9g5nb0ijj61haa8cf6nn2v2c4b4.apps.googleusercontent.com",
   });
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  FlatList,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase"; // Import Supabase client
@@ -23,7 +24,7 @@ export default function GameScreen() {
 
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [wordInput, setWordInput] = useState("");
+  const [letterInputs, setLetterInputs] = useState<string[]>([]); // Store individual letter inputs
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
   const [categoryCompleted, setCategoryCompleted] = useState(false); // To check if the category is completed
@@ -36,8 +37,8 @@ export default function GameScreen() {
     []
   );
   const [loading, setLoading] = useState(true);
+  const inputRefs = useRef<(TextInput | null)[]>([]); // Create refs to handle focus
 
-  // Fetch words and check if the category is already completed by the user
   useEffect(() => {
     if (categoryId) {
       const fetchWordsAndCheckCompletion = async () => {
@@ -46,7 +47,6 @@ export default function GameScreen() {
           const userId = (await supabase.auth.getSession()).data.session?.user
             .id;
 
-          // Step 1: Fetch all word_ids for the category
           const { data: wordCategoryData, error: wordCategoryError } =
             await supabase
               .from("word_categories")
@@ -61,47 +61,42 @@ export default function GameScreen() {
             throw new Error("No words found for this category.");
           }
 
-          // Step 2: Fetch user progress for the authenticated user and category
           const { data: progressData, error: progressError } = await supabase
             .from("user_progress")
             .select("last_word_id")
             .eq("category_id", categoryId)
             .eq("user_id", userId)
-            .maybeSingle(); // Use maybeSingle() to avoid errors when no progress exists
+            .maybeSingle();
 
           if (progressError) throw progressError;
 
-          // Check if the user has completed all words in the category
           if (progressData && progressData.last_word_id) {
             const lastWordIndex = wordIds.findIndex(
               (wordId: number) => wordId === progressData.last_word_id
             );
 
-            // If the last word in progress is the last word of the category, mark it as completed
             if (lastWordIndex === wordIds.length - 1) {
               setCategoryCompleted(true);
-              setLoading(false); // Stop further loading
+              setLoading(false);
               return;
             }
           }
 
-          // Step 3: Fetch words from the 'words' table using the word_ids
           const { data: wordData, error: wordError } = await supabase
             .from("words")
             .select("id, word, description")
-            .in("id", wordIds); // Fetch words with the matching word_ids
+            .in("id", wordIds);
 
           if (wordError) throw wordError;
 
           setWords(wordData || []);
 
-          // If the user has made progress, continue from the last word
           if (progressData && progressData.last_word_id) {
             const lastWordIndex = wordData.findIndex(
               (word: Word) => word.id === progressData.last_word_id
             );
             if (lastWordIndex !== -1) {
-              setCurrentWordIndex(lastWordIndex + 1); // Start from the next word
+              setCurrentWordIndex(lastWordIndex + 1);
             }
           }
         } catch (error) {
@@ -116,7 +111,13 @@ export default function GameScreen() {
     }
   }, [categoryId]);
 
-  // Fetch example sentences
+  useEffect(() => {
+    if (words.length > 0) {
+      const currentWord = words[currentWordIndex];
+      setLetterInputs(Array(currentWord.word.length).fill("")); // Initialize empty inputs based on word length
+    }
+  }, [currentWordIndex, words]);
+
   const fetchExampleSentences = async (wordId: number) => {
     try {
       const { data: sentenceData, error: sentenceError } = await supabase
@@ -132,17 +133,14 @@ export default function GameScreen() {
     }
   };
 
-  // Check if the guessed word is correct
   const checkWord = () => {
     const currentWord = words[currentWordIndex];
-    if (wordInput.trim().toLowerCase() === currentWord.word.toLowerCase()) {
+    const userGuess = letterInputs.join("").toLowerCase();
+    if (userGuess === currentWord.word.toLowerCase()) {
       setFeedbackMessage("Correct! Well done.");
       setWordGuessedCorrectly(true);
 
-      // Fetch example sentences for the current word
       fetchExampleSentences(currentWord.id);
-
-      // Update user progress in Supabase
       updateUserProgress(currentWord.id);
     } else {
       setFeedbackMessage("Oops, try again.");
@@ -150,25 +148,22 @@ export default function GameScreen() {
     }
   };
 
-  // Update user progress in Supabase
   const updateUserProgress = async (lastWordId: number) => {
     try {
       const userId = (await supabase.auth.getSession()).data.session?.user.id;
 
-      // First, check if the progress record exists for this user and category
       const { data: progressData, error: progressFetchError } = await supabase
         .from("user_progress")
         .select("*")
         .eq("user_id", userId)
         .eq("category_id", categoryId)
-        .single(); // Fetch the existing progress record for the user
+        .single();
 
       if (progressFetchError && progressFetchError.code !== "PGRST116") {
         throw progressFetchError;
       }
 
       if (progressData) {
-        // If progress exists, update the last_word_id
         const { error: updateError } = await supabase
           .from("user_progress")
           .update({ last_word_id: lastWordId })
@@ -177,7 +172,6 @@ export default function GameScreen() {
 
         if (updateError) throw updateError;
       } else {
-        // If no progress exists, insert a new progress record
         const { error: insertError } = await supabase
           .from("user_progress")
           .insert({
@@ -193,11 +187,10 @@ export default function GameScreen() {
     }
   };
 
-  // Navigate to the next word
   const nextWord = () => {
     if (currentWordIndex + 1 < words.length) {
       setCurrentWordIndex(currentWordIndex + 1);
-      setWordInput("");
+      setLetterInputs(Array(words[currentWordIndex + 1].word.length).fill(""));
       setFeedbackMessage("");
       setExampleSentences([]);
       setWordGuessedCorrectly(false);
@@ -210,13 +203,32 @@ export default function GameScreen() {
             text: "View Word List",
             onPress: () => {
               router.push({
-                pathname: "/wordList", // Navigate to the word list screen
+                pathname: "/wordList",
                 params: { categoryId, categoryName },
               });
             },
           },
         ]
       );
+    }
+  };
+
+  const handleLetterInput = (value: string, index: number) => {
+    const updatedInputs = [...letterInputs];
+    updatedInputs[index] = value;
+    setLetterInputs(updatedInputs);
+
+    if (value.length === 1 && index < letterInputs.length - 1) {
+      inputRefs.current[index + 1]?.focus(); // Automatically move to the next input
+    }
+  };
+
+  const handleKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === "Backspace" && letterInputs[index] === "") {
+      // If Backspace is pressed and current input is empty, move focus to the previous input
+      if (index > 0) {
+        inputRefs.current[index - 1]?.focus();
+      }
     }
   };
 
@@ -229,7 +241,6 @@ export default function GameScreen() {
   }
 
   if (categoryCompleted) {
-    // Show this message if the user has completed the category
     return (
       <View style={styles.container}>
         <Text style={styles.heading}>
@@ -258,62 +269,71 @@ export default function GameScreen() {
     );
   }
 
-  // Get the current word and description
   const currentWord = words[currentWordIndex];
 
   return (
     <View style={styles.container}>
-      {/* Game Heading */}
       <Text style={styles.heading}>Category: {categoryName}</Text>
 
-      {/* Display the word description */}
-      {currentWord && (
-        <Text style={styles.description}>
-          Description: {currentWord.description}
-        </Text>
-      )}
+      {/* Styled Description Box */}
+      <View style={styles.descriptionBox}>
+        <Text style={styles.descriptionText}>{currentWord.description}</Text>
+      </View>
 
-      {/* Input Field */}
+      {/* Input Boxes for Word Guessing */}
       {!wordGuessedCorrectly && (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your guess..."
-            value={wordInput}
-            onChangeText={setWordInput}
-          />
-
-          {/* Submit Button */}
-          <Pressable style={styles.button} onPress={checkWord}>
-            <Text style={styles.buttonText}>Submit Guess</Text>
-          </Pressable>
-        </>
-      )}
-
-      {/* Feedback */}
-      {feedbackMessage ? (
-        <Text style={styles.feedback}>{feedbackMessage}</Text>
-      ) : null}
-
-      {/* Example Sentences */}
-      {exampleSentences.length > 0 && (
-        <View style={styles.examplesContainer}>
-          <Text style={styles.examplesHeading}>Example Sentences:</Text>
-          {exampleSentences.map((item, index) => (
-            <Text key={index} style={styles.exampleSentence}>
-              {item.sentence}
-            </Text>
+        <View style={styles.letterInputContainer}>
+          {letterInputs.map((letter, index) => (
+            <TextInput
+              key={index}
+              style={styles.letterInput}
+              value={letter}
+              onChangeText={(value) => handleLetterInput(value, index)}
+              onKeyPress={(e) => handleKeyPress(e, index)}
+              maxLength={1}
+              ref={(el) => (inputRefs.current[index] = el)} // Assign ref to each input
+            />
           ))}
         </View>
       )}
 
-      {/* Next Word Button */}
+      {!wordGuessedCorrectly && (
+        <Pressable style={styles.button} onPress={checkWord}>
+          <Text style={styles.buttonText}>Submit Guess</Text>
+        </Pressable>
+      )}
+
+      {/* Next Word Button: Show only after correct guess */}
       {wordGuessedCorrectly && (
         <Pressable style={styles.button} onPress={nextWord}>
           <Text style={styles.buttonText}>
             {currentWordIndex + 1 < words.length ? "Next Word" : "Finish"}
           </Text>
         </Pressable>
+      )}
+
+      {/* Feedback Message */}
+      {feedbackMessage ? (
+        <Text style={styles.feedback}>{feedbackMessage}</Text>
+      ) : null}
+
+      {/* Example Sentences */}
+      {exampleSentences.length > 0 && (
+        <View style={{ flex: 1 }}>
+          <Text style={styles.examplesHeading}>Example Sentences:</Text>
+
+          {/* FlatList for example sentences */}
+          <FlatList
+            data={exampleSentences}
+            keyExtractor={(item, index) => `${index}`}
+            renderItem={({ item }) => (
+              <View style={styles.exampleSentenceBox}>
+                <Text style={styles.exampleSentence}>{item.sentence}</Text>
+              </View>
+            )}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          />
+        </View>
       )}
     </View>
   );
@@ -331,14 +351,26 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
   },
-  description: {
-    fontSize: 18,
-    fontStyle: "italic",
-    color: "#6b7280",
-    textAlign: "center",
+  descriptionBox: {
+    backgroundColor: "#fff",
+    borderColor: "#000",
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 24,
   },
-  input: {
+  descriptionText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  letterInputContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  letterInput: {
     backgroundColor: "#fff",
     borderColor: "#e5e7eb",
     borderWidth: 1,
@@ -346,8 +378,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 18,
-    width: "100%",
-    marginBottom: 24,
+    textAlign: "center",
+    width: 48,
+    margin: 4,
   },
   button: {
     backgroundColor: "#10b981",
@@ -369,16 +402,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: "center",
   },
-  examplesContainer: {
-    marginTop: 24,
-  },
   examplesHeading: {
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 12,
   },
+  exampleSentenceBox: {
+    backgroundColor: "#fff",
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
   exampleSentence: {
     fontSize: 16,
-    marginBottom: 8,
+    color: "#333",
   },
 });

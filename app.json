@@ -2,25 +2,26 @@
   "expo": {
     "name": "english-app",
     "slug": "english-app",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "com.googleusercontent.apps.691183788881-nv7eq9g5nb0ijj61haa8cf6nn2v2c4b4",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "icon": "./assets/images/icon.png",
       "googleServicesFile": "./client_691183788881-nv7eq9g5nb0ijj61haa8cf6nn2v2c4b4.apps.googleusercontent.com.plist",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.englishapp",
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.anonymous.englishapp"
@@ -28,7 +29,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": ["expo-router", "@react-native-google-signin/google-signin"],
     "experiments": {

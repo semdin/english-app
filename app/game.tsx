@@ -26,6 +26,7 @@ export default function GameScreen() {
   const [wordInput, setWordInput] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
+  const [categoryCompleted, setCategoryCompleted] = useState(false); // To check if the category is completed
 
   interface ExampleSentence {
     sentence: string;
@@ -36,16 +37,16 @@ export default function GameScreen() {
   );
   const [loading, setLoading] = useState(true);
 
-  // Fetch words for the selected category and load the user progress
+  // Fetch words and check if the category is already completed by the user
   useEffect(() => {
     if (categoryId) {
-      const fetchWordsAndProgress = async () => {
+      const fetchWordsAndCheckCompletion = async () => {
         setLoading(true);
         try {
           const userId = (await supabase.auth.getSession()).data.session?.user
             .id;
 
-          // Step 1: Fetch word_ids from word_categories where category_id matches
+          // Step 1: Fetch all word_ids for the category
           const { data: wordCategoryData, error: wordCategoryError } =
             await supabase
               .from("word_categories")
@@ -60,7 +61,31 @@ export default function GameScreen() {
             throw new Error("No words found for this category.");
           }
 
-          // Step 2: Fetch words from the 'words' table using the word_ids
+          // Step 2: Fetch user progress for the authenticated user and category
+          const { data: progressData, error: progressError } = await supabase
+            .from("user_progress")
+            .select("last_word_id")
+            .eq("category_id", categoryId)
+            .eq("user_id", userId)
+            .maybeSingle(); // Use maybeSingle() to avoid errors when no progress exists
+
+          if (progressError) throw progressError;
+
+          // Check if the user has completed all words in the category
+          if (progressData && progressData.last_word_id) {
+            const lastWordIndex = wordIds.findIndex(
+              (wordId: number) => wordId === progressData.last_word_id
+            );
+
+            // If the last word in progress is the last word of the category, mark it as completed
+            if (lastWordIndex === wordIds.length - 1) {
+              setCategoryCompleted(true);
+              setLoading(false); // Stop further loading
+              return;
+            }
+          }
+
+          // Step 3: Fetch words from the 'words' table using the word_ids
           const { data: wordData, error: wordError } = await supabase
             .from("words")
             .select("id, word, description")
@@ -70,18 +95,8 @@ export default function GameScreen() {
 
           setWords(wordData || []);
 
-          // Step 3: Fetch user progress for the authenticated user and category
-          const { data: progressData, error: progressError } = await supabase
-            .from("user_progress")
-            .select("last_word_id")
-            .eq("category_id", categoryId)
-            .eq("user_id", userId) // Ensure we're fetching progress for the current user
-            .maybeSingle(); // Use maybeSingle() to avoid errors when no progress exists
-
-          if (progressError) throw progressError;
-
+          // If the user has made progress, continue from the last word
           if (progressData && progressData.last_word_id) {
-            // Set the current word index based on the user's last word progress
             const lastWordIndex = wordData.findIndex(
               (word: Word) => word.id === progressData.last_word_id
             );
@@ -97,7 +112,7 @@ export default function GameScreen() {
         }
       };
 
-      fetchWordsAndProgress();
+      fetchWordsAndCheckCompletion();
     }
   }, [categoryId]);
 
@@ -189,9 +204,19 @@ export default function GameScreen() {
     } else {
       Alert.alert(
         "Congratulations!",
-        "You have completed all words in this category."
+        "You have completed all words in this category.",
+        [
+          {
+            text: "View Word List",
+            onPress: () => {
+              router.push({
+                pathname: "/wordList", // Navigate to the word list screen
+                params: { categoryId, categoryName },
+              });
+            },
+          },
+        ]
       );
-      router.push("/"); // Navigate back to the Category Selection screen
     }
   };
 
@@ -199,6 +224,28 @@ export default function GameScreen() {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#1e40af" />
+      </View>
+    );
+  }
+
+  if (categoryCompleted) {
+    // Show this message if the user has completed the category
+    return (
+      <View style={styles.container}>
+        <Text style={styles.heading}>
+          You've already completed this category!
+        </Text>
+        <Pressable
+          style={styles.button}
+          onPress={() =>
+            router.push({
+              pathname: "/wordList",
+              params: { categoryId, categoryName },
+            })
+          }
+        >
+          <Text style={styles.buttonText}>View Word List</Text>
+        </Pressable>
       </View>
     );
   }

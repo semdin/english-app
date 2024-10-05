@@ -42,6 +42,9 @@ export default function GameScreen() {
       const fetchWordsAndProgress = async () => {
         setLoading(true);
         try {
+          const userId = (await supabase.auth.getSession()).data.session?.user
+            .id;
+
           // Step 1: Fetch word_ids from word_categories where category_id matches
           const { data: wordCategoryData, error: wordCategoryError } =
             await supabase
@@ -67,11 +70,12 @@ export default function GameScreen() {
 
           setWords(wordData || []);
 
-          // Fetch user progress to load the last word the user guessed
+          // Step 3: Fetch user progress for the authenticated user and category
           const { data: progressData, error: progressError } = await supabase
             .from("user_progress")
             .select("last_word_id")
             .eq("category_id", categoryId)
+            .eq("user_id", userId) // Ensure we're fetching progress for the current user
             .maybeSingle(); // Use maybeSingle() to avoid errors when no progress exists
 
           if (progressError) throw progressError;
@@ -136,13 +140,13 @@ export default function GameScreen() {
     try {
       const userId = (await supabase.auth.getSession()).data.session?.user.id;
 
-      // First, check if the progress record exists
+      // First, check if the progress record exists for this user and category
       const { data: progressData, error: progressFetchError } = await supabase
         .from("user_progress")
         .select("*")
         .eq("user_id", userId)
         .eq("category_id", categoryId)
-        .single(); // Fetch the existing progress record
+        .single(); // Fetch the existing progress record for the user
 
       if (progressFetchError && progressFetchError.code !== "PGRST116") {
         throw progressFetchError;

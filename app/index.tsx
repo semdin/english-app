@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import Auth from "../components/Auth";
 import { supabase } from "../lib/supabase"; // Supabase'i import et
 import { StatusBar } from "expo-status-bar";
+import { GoogleSignin } from "@react-native-google-signin/google-signin"; // Import Google Signin
 
 export default function StartGameScreen() {
   const router = useRouter();
@@ -34,20 +35,30 @@ export default function StartGameScreen() {
     };
   }, []);
 
+  // Start game function (navigates to categories screen)
   const startGame = () => {
-    router.push("/categories"); // Kategori seçim ekranına yönlendir
+    router.push("/categories");
   };
 
+  // Sign out function (logs out from both Supabase and Google)
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null); // Kullanıcıyı null yaparak oturumu sıfırla
+    try {
+      // Supabase sign out
+      await supabase.auth.signOut();
+      // Google sign out
+      await GoogleSignin.signOut(); // This clears the Google sign-in session
+
+      setUser(null); // Clear user state after logging out
+    } catch (error) {
+      console.error("Error during sign out:", error);
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* Logo / Illustration */}
+      {/* Logo */}
       <Image
-        source={require("../assets/images/logo.png")} // Logonuzun path'ini ayarlayın
+        source={require("../assets/images/logo.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -62,19 +73,17 @@ export default function StartGameScreen() {
 
       {user ? (
         <>
-          {/* Start Button - Only visible if user is logged in */}
+          {/* Show Start Game button if user is logged in */}
           <Pressable style={styles.button} onPress={startGame}>
             <Text style={styles.buttonText}>Start Game</Text>
           </Pressable>
 
           {/* User Information */}
           <View style={styles.userInfo}>
-            {/* Kullanıcı profil fotoğrafı */}
             <Image
-              source={{ uri: user?.user_metadata?.avatar_url }} // Supabase'deki user_metadata'den avatar url alınıyor
+              source={{ uri: user?.user_metadata?.avatar_url }} // Avatar URL from user metadata
               style={styles.profileImage}
             />
-            {/* Welcome mesajı */}
             <Text style={styles.welcomeText}>
               Welcome, {user?.user_metadata?.full_name || "User"}!
             </Text>
@@ -87,7 +96,7 @@ export default function StartGameScreen() {
         </>
       ) : (
         <>
-          {/* Google Sign In */}
+          {/* Google Sign-In Prompt if no user is logged in */}
           <Text style={{ marginTop: 32, marginBottom: 16 }}>
             Or sign in with:
           </Text>

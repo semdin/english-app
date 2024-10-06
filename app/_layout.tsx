@@ -8,7 +8,7 @@ import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router"; // Import `useRouter` for navigation
 import * as SplashScreen from "expo-splash-screen";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Pressable, View } from "react-native";
+import { Pressable, View, Alert } from "react-native"; // Import Alert
 import { supabase } from "../lib/supabase"; // Supabase client
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { GoogleSignin } from "@react-native-google-signin/google-signin"; // Import Google Signin
@@ -55,6 +55,7 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Function to handle the actual logout
   const handleLogout = async () => {
     try {
       // Logout from Supabase
@@ -73,13 +74,33 @@ export default function RootLayout() {
     }
   };
 
+  // Function to show logout confirmation
+  const confirmLogout = () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to log out?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Logout",
+          onPress: handleLogout, // Call the logout function if confirmed
+          style: "destructive",
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   if (!loaded) {
     return null;
   }
 
   const renderHeaderRight = () => {
     return user ? (
-      <Pressable onPress={handleLogout} style={{ marginRight: 10 }}>
+      <Pressable onPress={confirmLogout} style={{ marginRight: 10 }}>
         <MaterialIcons name="logout" size={24} color="black" />
       </Pressable>
     ) : null;

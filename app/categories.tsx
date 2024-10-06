@@ -6,10 +6,11 @@ import {
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  useColorScheme, // Import useColorScheme
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
-import { supabase } from "../lib/supabase"; // Import supabase
+import { supabase } from "../lib/supabase";
 
 export default function CategoriesScreen() {
   interface Category {
@@ -30,8 +31,8 @@ export default function CategoriesScreen() {
     [key: number]: UserProgress;
   }>({});
   const router = useRouter();
+  const colorScheme = useColorScheme(); // Detect theme
 
-  // Fetch categories from Supabase
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -56,7 +57,6 @@ export default function CategoriesScreen() {
 
   const fetchUserProgressAndWordCounts = async (userId: string) => {
     try {
-      // 1. Fetch word counts for all categories from word_categories
       const { data: categoryWordCounts, error: wordCountError } = await supabase
         .from("word_categories")
         .select("category_id, word_id");
@@ -69,7 +69,6 @@ export default function CategoriesScreen() {
         return;
       }
 
-      // Create a map to store the total number of words per category
       const categoryWordCountMap: { [key: number]: number } = {};
       categoryWordCounts.forEach((item: { category_id: number }) => {
         if (!categoryWordCountMap[item.category_id]) {
@@ -79,7 +78,6 @@ export default function CategoriesScreen() {
         }
       });
 
-      // 2. Fetch user progress
       const { data: userProgressData, error: userProgressError } =
         await supabase
           .from("user_progress")
@@ -92,13 +90,10 @@ export default function CategoriesScreen() {
       }
 
       const progressData: { [key: number]: UserProgress } = {};
-
-      // 3. Calculate the completed count for each category
       userProgressData.forEach((progress: any) => {
         const last_word_id = progress.last_word_id;
         const total_words = categoryWordCountMap[progress.category_id] || 0;
 
-        // Count how many words have been completed by comparing word_id <= last_word_id
         const completed_count = categoryWordCounts.filter(
           (item) =>
             item.category_id === progress.category_id &&
@@ -108,18 +103,17 @@ export default function CategoriesScreen() {
         progressData[progress.category_id] = {
           category_id: progress.category_id,
           completed_count,
-          total_words, // Use the word count from the word_categories table
+          total_words,
         };
       });
 
-      // 4. Ensure that all categories have their word count even if there's no user progress
       Object.keys(categoryWordCountMap).forEach((categoryId) => {
-        const id = parseInt(categoryId); // Convert categoryId from string to number
+        const id = parseInt(categoryId);
         if (!progressData[id]) {
           progressData[id] = {
             category_id: id,
-            completed_count: 0, // No progress
-            total_words: categoryWordCountMap[id], // Word count for the category
+            completed_count: 0,
+            total_words: categoryWordCountMap[id],
           };
         }
       });
@@ -130,7 +124,6 @@ export default function CategoriesScreen() {
     }
   };
 
-  // Fetch categories and user progress
   useEffect(() => {
     const getUserSession = async () => {
       const {
@@ -158,22 +151,40 @@ export default function CategoriesScreen() {
       <MaterialIcons
         name={iconName as keyof typeof MaterialIcons.glyphMap}
         size={24}
-        color="#fff"
+        color={colorScheme === "dark" ? "#fff" : "#000"} // Adjust icon color based on theme
       />
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" ? styles.darkContainer : styles.lightContainer, // Dynamically change background
+        ]}
+      >
         <ActivityIndicator size="large" color="#1e40af" />
+        {/* Centered loading spinner */}
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Select a Category</Text>
+    <View
+      style={[
+        styles.container,
+        colorScheme === "dark" && styles.darkContainer, // Apply dark mode background
+      ]}
+    >
+      <Text
+        style={[
+          styles.heading,
+          colorScheme === "dark" && styles.darkHeading, // Adjust heading text color
+        ]}
+      >
+        Select a Category
+      </Text>
       <FlatList
         data={categories}
         keyExtractor={(item) => item.id.toString()}
@@ -181,16 +192,33 @@ export default function CategoriesScreen() {
           const progress = userProgress[item.id];
           const progressText = progress
             ? `${progress.completed_count}/${progress.total_words}`
-            : "0/0"; // Default if no progress found
+            : "0/0";
 
           return (
             <Pressable
-              style={styles.categoryButton}
+              style={[
+                styles.categoryButton,
+                colorScheme === "dark" && styles.darkCategoryButton, // Adjust button background for dark mode
+              ]}
               onPress={() => selectCategory(item.id, item.name)}
             >
               {renderIcon(item.icon)}
-              <Text style={styles.categoryButtonText}>{item.name}</Text>
-              <Text style={styles.progressText}>{progressText}</Text>
+              <Text
+                style={[
+                  styles.categoryButtonText,
+                  colorScheme === "dark" && styles.darkCategoryButtonText, // Adjust text color for dark mode
+                ]}
+              >
+                {item.name}
+              </Text>
+              <Text
+                style={[
+                  styles.progressText,
+                  colorScheme === "dark" && styles.darkProgressText, // Adjust progress text color for dark mode
+                ]}
+              >
+                {progressText}
+              </Text>
             </Pressable>
           );
         }}
@@ -208,11 +236,21 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#f5f5f5",
   },
+  darkContainer: {
+    backgroundColor: "#121212", // Dark mode background color
+  },
+  lightContainer: {
+    backgroundColor: "#f5f5f5", // Light theme background color
+  },
   heading: {
     fontSize: 32,
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 24,
+    color: "#000", // Light mode heading color
+  },
+  darkHeading: {
+    color: "#fff", // Dark mode heading color
   },
   listContainer: {
     paddingBottom: 16,
@@ -232,16 +270,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "column",
   },
+  darkCategoryButton: {
+    backgroundColor: "#333", // Dark mode button background color
+  },
   categoryButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
     marginTop: 8,
   },
+  darkCategoryButtonText: {
+    color: "#fff", // Dark mode text color (can remain the same for buttons)
+  },
   progressText: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "400",
     marginTop: 4,
+  },
+  darkProgressText: {
+    color: "#d1d5db", // Lighter color for progress text in dark mode
   },
 });

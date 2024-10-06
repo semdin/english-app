@@ -1,94 +1,110 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, Image, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Image,
+  StyleSheet,
+  useColorScheme,
+} from "react-native"; // Add useColorScheme here
 import { useRouter } from "expo-router";
 import Auth from "../components/Auth";
-import { supabase } from "../lib/supabase"; // Supabase'i import et
+import { supabase } from "../lib/supabase";
 import { StatusBar } from "expo-status-bar";
 import { GoogleSignin } from "@react-native-google-signin/google-signin"; // Import Google Signin
 
 export default function StartGameScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null); // Kullanıcı bilgisini tutmak için state
+  const [user, setUser] = useState<any>(null);
+  const colorScheme = useColorScheme(); // Get current theme
 
   useEffect(() => {
-    // Supabase ile oturum açan kullanıcıyı kontrol et
     const getSession = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        setUser(session.user); // Eğer oturum varsa kullanıcıyı ayarla
+        setUser(session.user);
       }
     };
     getSession();
 
-    // Oturum durumu değişikliklerini dinle
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user || null);
       }
     );
 
-    // Component unmount olunca dinleyiciyi temizle
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
 
-  // Start game function (navigates to categories screen)
   const startGame = () => {
     router.push("/categories");
   };
 
-  // Sign out function (logs out from both Supabase and Google)
   const signOut = async () => {
     try {
-      // Supabase sign out
       await supabase.auth.signOut();
-      // Google sign out
-      await GoogleSignin.signOut(); // This clears the Google sign-in session
-
-      setUser(null); // Clear user state after logging out
+      await GoogleSignin.signOut();
+      setUser(null);
     } catch (error) {
       console.error("Error during sign out:", error);
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Logo */}
+    <View
+      style={[
+        styles.container,
+        colorScheme === "dark" && styles.darkContainer, // Apply dark theme styling
+      ]}
+    >
       <Image
         source={require("../assets/images/logo.png")}
         style={styles.logo}
         resizeMode="contain"
       />
 
-      {/* Title */}
-      <Text style={styles.title}>Word Game</Text>
+      <Text
+        style={[
+          styles.title,
+          colorScheme === "dark" && styles.darkTitle, // Apply dark theme text color
+        ]}
+      >
+        Word Game
+      </Text>
 
-      {/* Subtitle */}
-      <Text style={styles.subtitle}>
+      <Text
+        style={[
+          styles.subtitle,
+          colorScheme === "dark" && styles.darkSubtitle, // Apply dark theme subtitle color
+        ]}
+      >
         Test your vocabulary! Sign in to start.
       </Text>
 
       {user ? (
         <>
-          {/* Show Start Game button if user is logged in */}
           <Pressable style={styles.button} onPress={startGame}>
             <Text style={styles.buttonText}>Start Game</Text>
           </Pressable>
 
-          {/* User Information */}
           <View style={styles.userInfo}>
             <Image
-              source={{ uri: user?.user_metadata?.avatar_url }} // Avatar URL from user metadata
+              source={{ uri: user?.user_metadata?.avatar_url }}
               style={styles.profileImage}
             />
-            <Text style={styles.welcomeText}>
+            <Text
+              style={[
+                styles.welcomeText,
+                colorScheme === "dark" && styles.darkWelcomeText, // Apply dark theme text color
+              ]}
+            >
               Welcome, {user?.user_metadata?.full_name || "User"}!
             </Text>
 
-            {/* Sign Out Button */}
             <Pressable style={styles.signOutButton} onPress={signOut}>
               <Text style={styles.signOutText}>Sign Out</Text>
             </Pressable>
@@ -96,7 +112,6 @@ export default function StartGameScreen() {
         </>
       ) : (
         <>
-          {/* Google Sign-In Prompt if no user is logged in */}
           <Text style={{ marginTop: 32, marginBottom: 16 }}>
             Or sign in with:
           </Text>
@@ -116,6 +131,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
     paddingHorizontal: 16,
   },
+  darkContainer: {
+    backgroundColor: "#121212", // Dark background color
+  },
+  lightContainer: {
+    backgroundColor: "#f5f5f5", // Light theme background color
+  },
   logo: {
     width: 150,
     height: 150,
@@ -128,11 +149,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
+  darkTitle: {
+    color: "#fff", // Light text for dark theme
+  },
   subtitle: {
     fontSize: 18,
     color: "#6b7280",
     textAlign: "center",
     marginBottom: 32,
+  },
+  darkSubtitle: {
+    color: "#d1d5db", // Lighter subtitle text for dark theme
   },
   button: {
     backgroundColor: "#1e40af",
@@ -163,6 +190,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#000",
     fontWeight: "600",
+  },
+  darkWelcomeText: {
+    color: "#fff", // Light text for dark theme
   },
   signOutButton: {
     marginTop: 16,

@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  useColorScheme, // Import useColorScheme
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { supabase } from "../lib/supabase"; // Import Supabase client
+import { supabase } from "../lib/supabase";
 
 export default function GameScreen() {
   const { categoryId, categoryName } = useLocalSearchParams();
   const router = useRouter();
+  const colorScheme = useColorScheme(); // Detect theme
 
   interface Word {
     id: number;
@@ -24,11 +26,10 @@ export default function GameScreen() {
 
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [letterInputs, setLetterInputs] = useState<string[]>([]); // Store individual letter inputs
+  const [letterInputs, setLetterInputs] = useState<string[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
-  const [categoryCompleted, setCategoryCompleted] = useState(false); // To check if the category is completed
-
+  const [categoryCompleted, setCategoryCompleted] = useState(false);
   interface ExampleSentence {
     sentence: string;
   }
@@ -37,7 +38,7 @@ export default function GameScreen() {
     []
   );
   const [loading, setLoading] = useState(true);
-  const inputRefs = useRef<(TextInput | null)[]>([]); // Create refs to handle focus
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
     if (categoryId) {
@@ -114,7 +115,7 @@ export default function GameScreen() {
   useEffect(() => {
     if (words.length > 0) {
       const currentWord = words[currentWordIndex];
-      setLetterInputs(Array(currentWord.word.length).fill("")); // Initialize empty inputs based on word length
+      setLetterInputs(Array(currentWord.word.length).fill(""));
     }
   }, [currentWordIndex, words]);
 
@@ -219,31 +220,116 @@ export default function GameScreen() {
     setLetterInputs(updatedInputs);
 
     if (value.length === 1 && index < letterInputs.length - 1) {
-      inputRefs.current[index + 1]?.focus(); // Automatically move to the next input
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === "Backspace" && letterInputs[index] === "") {
-      // If Backspace is pressed and current input is empty, move focus to the previous input
       if (index > 0) {
         inputRefs.current[index - 1]?.focus();
       }
     }
   };
 
+  const giveHint = () => {
+    const currentWord = words[currentWordIndex].word.split("");
+    const emptyIndices = letterInputs
+      .map((letter, index) => (letter === "" ? index : null))
+      .filter((index) => index !== null);
+
+    if (emptyIndices.length > 0) {
+      const randomIndex =
+        emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+      const updatedInputs = [...letterInputs];
+      updatedInputs[randomIndex!] = currentWord[randomIndex!]; // Fill the correct letter in the random empty box
+      setLetterInputs(updatedInputs);
+    }
+  };
+
+  // Define emptyIndices inside the render logic for disabling the button
+  const emptyIndices = letterInputs
+    .map((letter, index) => (letter === "" ? index : null))
+    .filter((index) => index !== null);
+
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" ? styles.darkContainer : styles.lightContainer, // Dynamically change background
+        ]}
+      >
         <ActivityIndicator size="large" color="#1e40af" />
       </View>
     );
   }
 
+  const resetProgress = async () => {
+    try {
+      const userId = (await supabase.auth.getSession()).data.session?.user.id;
+
+      const { error } = await supabase
+        .from("user_progress")
+        .delete()
+        .eq("user_id", userId)
+        .eq("category_id", categoryId);
+
+      if (error) throw error;
+
+      setCurrentWordIndex(0); // Reset the current word index to the beginning
+      setFeedbackMessage("");
+      setWordGuessedCorrectly(false);
+
+      Alert.alert(
+        "Progress Reset",
+        "Your progress has been reset. The game will restart.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              router.replace({
+                pathname: "/game",
+                params: { categoryId, categoryName },
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error resetting progress:", error);
+      Alert.alert("Error", "Unable to reset progress. Please try again.");
+    }
+  };
+
+  const handlePlayAgain = () => {
+    Alert.alert(
+      "Reset Progress",
+      "If you confirm, the words in this category will start from the beginning and your progress will be lost. Do you want to continue?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Confirm",
+          onPress: resetProgress,
+        },
+      ]
+    );
+  };
+
   if (categoryCompleted) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.heading}>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" && styles.darkContainer,
+        ]}
+      >
+        <Text
+          style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+        >
           You've already completed this category!
         </Text>
         <Pressable
@@ -257,14 +343,28 @@ export default function GameScreen() {
         >
           <Text style={styles.buttonText}>View Word List</Text>
         </Pressable>
+
+        {/* Play Again Button */}
+        <Pressable style={styles.button} onPress={handlePlayAgain}>
+          <Text style={styles.buttonText}>Play Again</Text>
+        </Pressable>
       </View>
     );
   }
 
   if (words.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.heading}>No words found in this category.</Text>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" && styles.darkContainer,
+        ]}
+      >
+        <Text
+          style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+        >
+          No words found in this category.
+        </Text>
       </View>
     );
   }
@@ -272,38 +372,71 @@ export default function GameScreen() {
   const currentWord = words[currentWordIndex];
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Category: {categoryName}</Text>
+    <View
+      style={[styles.container, colorScheme === "dark" && styles.darkContainer]}
+    >
+      <Text
+        style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+      >
+        Category: {categoryName}
+      </Text>
 
-      {/* Styled Description Box */}
-      <View style={styles.descriptionBox}>
-        <Text style={styles.descriptionText}>{currentWord.description}</Text>
+      <View
+        style={[
+          styles.descriptionBox,
+          colorScheme === "dark" && styles.darkDescriptionBox,
+        ]}
+      >
+        <Text
+          style={[
+            styles.descriptionText,
+            colorScheme === "dark" && styles.darkDescriptionText,
+          ]}
+        >
+          {currentWord.description}
+        </Text>
       </View>
 
-      {/* Input Boxes for Word Guessing */}
       {!wordGuessedCorrectly && (
-        <View style={styles.letterInputContainer}>
-          {letterInputs.map((letter, index) => (
-            <TextInput
-              key={index}
-              style={styles.letterInput}
-              value={letter}
-              onChangeText={(value) => handleLetterInput(value, index)}
-              onKeyPress={(e) => handleKeyPress(e, index)}
-              maxLength={1}
-              ref={(el) => (inputRefs.current[index] = el)} // Assign ref to each input
-            />
-          ))}
-        </View>
+        <>
+          <View style={styles.letterInputContainer}>
+            {letterInputs.map((letter, index) => (
+              <TextInput
+                key={index}
+                style={[
+                  styles.letterInput,
+                  colorScheme === "dark" && styles.darkLetterInput,
+                ]}
+                value={letter}
+                onChangeText={(value) => handleLetterInput(value, index)}
+                onKeyPress={(e) => handleKeyPress(e, index)}
+                maxLength={1}
+                ref={(el) => (inputRefs.current[index] = el)}
+              />
+            ))}
+          </View>
+
+          {/* Submit Guess Button */}
+          <Pressable style={styles.button} onPress={checkWord}>
+            <Text style={styles.buttonText}>Submit Guess</Text>
+          </Pressable>
+
+          {/* Hint Button */}
+          <Pressable
+            style={[
+              styles.button,
+              {
+                backgroundColor: emptyIndices.length === 0 ? "#aaa" : "#10b981",
+              },
+            ]}
+            onPress={giveHint}
+            disabled={emptyIndices.length === 0} // Disable when no empty boxes
+          >
+            <Text style={styles.buttonText}>Hint</Text>
+          </Pressable>
+        </>
       )}
 
-      {!wordGuessedCorrectly && (
-        <Pressable style={styles.button} onPress={checkWord}>
-          <Text style={styles.buttonText}>Submit Guess</Text>
-        </Pressable>
-      )}
-
-      {/* Next Word Button: Show only after correct guess */}
       {wordGuessedCorrectly && (
         <Pressable style={styles.button} onPress={nextWord}>
           <Text style={styles.buttonText}>
@@ -312,23 +445,46 @@ export default function GameScreen() {
         </Pressable>
       )}
 
-      {/* Feedback Message */}
       {feedbackMessage ? (
-        <Text style={styles.feedback}>{feedbackMessage}</Text>
+        <Text
+          style={[
+            styles.feedback,
+            colorScheme === "dark" && styles.darkFeedback,
+          ]}
+        >
+          {feedbackMessage}
+        </Text>
       ) : null}
 
-      {/* Example Sentences */}
       {exampleSentences.length > 0 && (
         <View style={{ flex: 1 }}>
-          <Text style={styles.examplesHeading}>Example Sentences:</Text>
+          <Text
+            style={[
+              styles.examplesHeading,
+              colorScheme === "dark" && styles.darkExamplesHeading,
+            ]}
+          >
+            Example Sentences:
+          </Text>
 
-          {/* FlatList for example sentences */}
           <FlatList
             data={exampleSentences}
             keyExtractor={(item, index) => `${index}`}
             renderItem={({ item }) => (
-              <View style={styles.exampleSentenceBox}>
-                <Text style={styles.exampleSentence}>{item.sentence}</Text>
+              <View
+                style={[
+                  styles.exampleSentenceBox,
+                  colorScheme === "dark" && styles.darkExampleSentenceBox,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.exampleSentence,
+                    colorScheme === "dark" && styles.darkExampleSentence,
+                  ]}
+                >
+                  {item.sentence}
+                </Text>
               </View>
             )}
             contentContainerStyle={{ paddingBottom: 24 }}
@@ -345,11 +501,21 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#f5f5f5",
   },
+  darkContainer: {
+    backgroundColor: "#121212",
+  },
+  lightContainer: {
+    backgroundColor: "#f5f5f5", // Light theme background color
+  },
   heading: {
     fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 24,
+    color: "#000",
+  },
+  darkHeading: {
+    color: "#fff",
   },
   descriptionBox: {
     backgroundColor: "#fff",
@@ -359,10 +525,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 24,
   },
+  darkDescriptionBox: {
+    backgroundColor: "#333",
+    borderColor: "#fff",
+  },
   descriptionText: {
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",
+    color: "#000",
+  },
+  darkDescriptionText: {
+    color: "#fff",
   },
   letterInputContainer: {
     flexDirection: "row",
@@ -381,6 +555,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     width: 48,
     margin: 4,
+    color: "#000",
+  },
+  darkLetterInput: {
+    backgroundColor: "#333",
+    borderColor: "#555",
+    color: "#fff",
   },
   button: {
     backgroundColor: "#10b981",
@@ -402,10 +582,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: "center",
   },
+  darkFeedback: {
+    color: "#d1d5db",
+  },
   examplesHeading: {
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 12,
+    color: "#000",
+  },
+  darkExamplesHeading: {
+    color: "#fff",
   },
   exampleSentenceBox: {
     backgroundColor: "#fff",
@@ -415,8 +602,15 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
   },
+  darkExampleSentenceBox: {
+    backgroundColor: "#333",
+    borderColor: "#555",
+  },
   exampleSentence: {
     fontSize: 16,
     color: "#333",
+  },
+  darkExampleSentence: {
+    color: "#ddd",
   },
 });

@@ -7,12 +7,15 @@ import {
   StyleSheet,
   Modal,
   ActivityIndicator,
+  TouchableWithoutFeedback, // Import TouchableWithoutFeedback
+  useColorScheme,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { supabase } from "../lib/supabase"; // Import Supabase client
+import { supabase } from "../lib/supabase";
 
 export default function WordListScreen() {
   const { categoryId, categoryName } = useLocalSearchParams();
+  const colorScheme = useColorScheme(); // Detect theme
 
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,12 +24,10 @@ export default function WordListScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
 
-  // Fetch words for the selected category
   useEffect(() => {
     const fetchWords = async () => {
       setLoading(true);
       try {
-        // Fetch words for this category
         const { data: wordCategoryData, error: wordCategoryError } =
           await supabase
             .from("word_categories")
@@ -47,13 +48,11 @@ export default function WordListScreen() {
     fetchWords();
   }, [categoryId]);
 
-  // Fetch example sentences and show the modal
   const showWordDetail = async (word: any) => {
     setModalLoading(true);
     setSelectedWord(word);
 
     try {
-      // Fetch example sentences for the word
       const { data: sentenceData, error: sentenceError } = await supabase
         .from("example_sentences")
         .select("sentence")
@@ -65,11 +64,10 @@ export default function WordListScreen() {
       console.error("Error fetching example sentences:", error);
     } finally {
       setModalLoading(false);
-      setModalVisible(true); // Show the modal after data is fetched
+      setModalVisible(true);
     }
   };
 
-  // Handle navigation between words inside the modal
   const navigateToWord = (direction: "next" | "previous") => {
     const currentIndex = words.findIndex((w) => w.id === selectedWord.id);
     if (direction === "next" && currentIndex + 1 < words.length) {
@@ -81,7 +79,12 @@ export default function WordListScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" ? styles.darkContainer : styles.lightContainer, // Dynamically change background
+        ]}
+      >
         <ActivityIndicator size="large" color="#1e40af" />
       </View>
     );
@@ -89,25 +92,50 @@ export default function WordListScreen() {
 
   if (words.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.heading}>No words found in this category.</Text>
+      <View
+        style={[
+          styles.container,
+          colorScheme === "dark" && styles.darkContainer,
+        ]}
+      >
+        <Text
+          style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+        >
+          No words found in this category.
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Words in {categoryName}</Text>
+    <View
+      style={[styles.container, colorScheme === "dark" && styles.darkContainer]}
+    >
+      <Text
+        style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+      >
+        Words in {categoryName}
+      </Text>
       <FlatList
         data={words}
-        numColumns={2} // Display 2 words per row
+        numColumns={2}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <Pressable
-            style={styles.wordButton}
+            style={[
+              styles.wordButton,
+              colorScheme === "dark" && styles.darkWordButton,
+            ]}
             onPress={() => showWordDetail(item)}
           >
-            <Text style={styles.wordText}>{item.word}</Text>
+            <Text
+              style={[
+                styles.wordText,
+                colorScheme === "dark" && styles.darkWordText,
+              ]}
+            >
+              {item.word}
+            </Text>
           </Pressable>
         )}
         contentContainerStyle={styles.wordList}
@@ -120,64 +148,100 @@ export default function WordListScreen() {
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            {modalLoading ? (
-              <ActivityIndicator size="large" color="#1e40af" />
-            ) : (
-              <>
-                {selectedWord && (
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View
+                style={[
+                  styles.modalContent,
+                  colorScheme === "dark" && styles.darkModalContent,
+                ]}
+              >
+                {modalLoading ? (
+                  <ActivityIndicator size="large" color="#1e40af" />
+                ) : (
                   <>
-                    <Text style={styles.modalHeading}>
-                      Word: {selectedWord.word}
-                    </Text>
-                    <Text style={styles.modalDescription}>
-                      Description: {selectedWord.description}
-                    </Text>
-
-                    <Text style={styles.examplesHeading}>
-                      Example Sentences:
-                    </Text>
-                    {exampleSentences.length > 0 ? (
-                      exampleSentences.map((sentence, index) => (
-                        <Text key={index} style={styles.exampleSentence}>
-                          {sentence.sentence}
+                    {selectedWord && (
+                      <>
+                        <Text
+                          style={[
+                            styles.modalHeading,
+                            colorScheme === "dark" && styles.darkModalHeading,
+                          ]}
+                        >
+                          Word: {selectedWord.word}
                         </Text>
-                      ))
-                    ) : (
-                      <Text>No example sentences available.</Text>
+                        <Text
+                          style={[
+                            styles.modalDescription,
+                            colorScheme === "dark" &&
+                              styles.darkModalDescription,
+                          ]}
+                        >
+                          Description: {selectedWord.description}
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.examplesHeading,
+                            colorScheme === "dark" &&
+                              styles.darkExamplesHeading,
+                          ]}
+                        >
+                          Example Sentences:
+                        </Text>
+                        {exampleSentences.length > 0 ? (
+                          exampleSentences.map((sentence, index) => (
+                            <Text
+                              key={index}
+                              style={[
+                                styles.exampleSentence,
+                                colorScheme === "dark" &&
+                                  styles.darkExampleSentence,
+                              ]}
+                            >
+                              {sentence.sentence}
+                            </Text>
+                          ))
+                        ) : (
+                          <Text>No example sentences available.</Text>
+                        )}
+
+                        {/* Navigation buttons */}
+                        <View style={styles.navigationButtons}>
+                          <Pressable
+                            style={styles.modalButton}
+                            onPress={() => navigateToWord("previous")}
+                          >
+                            <Text style={styles.buttonText}>Previous</Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.modalButton}
+                            onPress={() => navigateToWord("next")}
+                          >
+                            <Text style={styles.buttonText}>Next</Text>
+                          </Pressable>
+                        </View>
+
+                        {/* Close Modal Button */}
+                        <Pressable
+                          style={[
+                            styles.modalButton,
+                            { backgroundColor: "red" },
+                          ]}
+                          onPress={() => setModalVisible(false)}
+                        >
+                          <Text style={styles.buttonText}>Close</Text>
+                        </Pressable>
+                      </>
                     )}
-
-                    {/* Navigation buttons */}
-                    <View style={styles.navigationButtons}>
-                      <Pressable
-                        style={styles.modalButton}
-                        onPress={() => navigateToWord("previous")}
-                      >
-                        <Text style={styles.buttonText}>Previous</Text>
-                      </Pressable>
-
-                      <Pressable
-                        style={styles.modalButton}
-                        onPress={() => navigateToWord("next")}
-                      >
-                        <Text style={styles.buttonText}>Next</Text>
-                      </Pressable>
-                    </View>
-
-                    {/* Close Modal Button */}
-                    <Pressable
-                      style={[styles.modalButton, { backgroundColor: "red" }]}
-                      onPress={() => setModalVisible(false)}
-                    >
-                      <Text style={styles.buttonText}>Close</Text>
-                    </Pressable>
                   </>
                 )}
-              </>
-            )}
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -189,11 +253,21 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#f5f5f5",
   },
+  darkContainer: {
+    backgroundColor: "#121212",
+  },
+  lightContainer: {
+    backgroundColor: "#f5f5f5", // Light theme background color
+  },
   heading: {
     fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 24,
+    color: "#000",
+  },
+  darkHeading: {
+    color: "#fff",
   },
   wordButton: {
     backgroundColor: "#1e40af",
@@ -204,10 +278,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  darkWordButton: {
+    backgroundColor: "#333",
+  },
   wordText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "600",
+  },
+  darkWordText: {
+    color: "#fff",
   },
   wordList: {
     justifyContent: "space-between",
@@ -216,7 +296,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)", // Dim background
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContent: {
     backgroundColor: "#fff",
@@ -225,11 +305,18 @@ const styles = StyleSheet.create({
     width: "90%",
     maxHeight: "80%",
   },
+  darkModalContent: {
+    backgroundColor: "#333",
+  },
   modalHeading: {
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 12,
     textAlign: "center",
+    color: "#000",
+  },
+  darkModalHeading: {
+    color: "#fff",
   },
   modalDescription: {
     fontSize: 16,
@@ -237,14 +324,25 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     color: "#6b7280",
   },
+  darkModalDescription: {
+    color: "#ccc",
+  },
   examplesHeading: {
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 8,
+    color: "#000",
+  },
+  darkExamplesHeading: {
+    color: "#fff",
   },
   exampleSentence: {
     fontSize: 16,
     marginBottom: 6,
+    color: "#333",
+  },
+  darkExampleSentence: {
+    color: "#ddd",
   },
   navigationButtons: {
     flexDirection: "row",

@@ -8,9 +8,12 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  useColorScheme, // Import useColorScheme
+  TouchableWithoutFeedback, // Import TouchableWithoutFeedback
+  Keyboard, // Import Keyboard
+  useColorScheme,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { supabase } from "../lib/supabase";
 
 export default function GameScreen() {
@@ -27,9 +30,11 @@ export default function GameScreen() {
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [letterInputs, setLetterInputs] = useState<string[]>([]);
+  const [disabledInputs, setDisabledInputs] = useState<boolean[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
   const [categoryCompleted, setCategoryCompleted] = useState(false);
+  const navigation = useNavigation<any>();
   interface ExampleSentence {
     sentence: string;
   }
@@ -116,6 +121,7 @@ export default function GameScreen() {
     if (words.length > 0) {
       const currentWord = words[currentWordIndex];
       setLetterInputs(Array(currentWord.word.length).fill(""));
+      setDisabledInputs(Array(currentWord.word.length).fill(false)); // Initialize disabled states
     }
   }, [currentWordIndex, words]);
 
@@ -140,7 +146,6 @@ export default function GameScreen() {
     if (userGuess === currentWord.word.toLowerCase()) {
       setFeedbackMessage("Correct! Well done.");
       setWordGuessedCorrectly(true);
-
       fetchExampleSentences(currentWord.id);
       updateUserProgress(currentWord.id);
     } else {
@@ -192,6 +197,9 @@ export default function GameScreen() {
     if (currentWordIndex + 1 < words.length) {
       setCurrentWordIndex(currentWordIndex + 1);
       setLetterInputs(Array(words[currentWordIndex + 1].word.length).fill(""));
+      setDisabledInputs(
+        Array(words[currentWordIndex + 1].word.length).fill(false)
+      ); // Reset disabled inputs
       setFeedbackMessage("");
       setExampleSentences([]);
       setWordGuessedCorrectly(false);
@@ -215,8 +223,9 @@ export default function GameScreen() {
   };
 
   const handleLetterInput = (value: string, index: number) => {
+    if (disabledInputs[index]) return; // Prevent input in disabled fields
     const updatedInputs = [...letterInputs];
-    updatedInputs[index] = value;
+    updatedInputs[index] = value.toUpperCase(); // Force uppercase
     setLetterInputs(updatedInputs);
 
     if (value.length === 1 && index < letterInputs.length - 1) {
@@ -242,8 +251,13 @@ export default function GameScreen() {
       const randomIndex =
         emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
       const updatedInputs = [...letterInputs];
-      updatedInputs[randomIndex!] = currentWord[randomIndex!]; // Fill the correct letter in the random empty box
+      const updatedDisabled = [...disabledInputs];
+
+      updatedInputs[randomIndex!] = currentWord[randomIndex!].toUpperCase(); // Fill hint in uppercase
+      updatedDisabled[randomIndex!] = true; // Disable the hint input
+
       setLetterInputs(updatedInputs);
+      setDisabledInputs(updatedDisabled);
     }
   };
 
@@ -288,10 +302,9 @@ export default function GameScreen() {
           {
             text: "OK",
             onPress: () => {
-              router.replace({
-                pathname: "/game",
-                params: { categoryId, categoryName },
-              });
+              // Pop the current screen and push it back to reset it
+              navigation.pop();
+              navigation.push("game", { categoryId, categoryName });
             },
           },
         ]
@@ -372,126 +385,138 @@ export default function GameScreen() {
   const currentWord = words[currentWordIndex];
 
   return (
-    <View
-      style={[styles.container, colorScheme === "dark" && styles.darkContainer]}
-    >
-      <Text
-        style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
-      >
-        Category: {categoryName}
-      </Text>
-
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View
         style={[
-          styles.descriptionBox,
-          colorScheme === "dark" && styles.darkDescriptionBox,
+          styles.container,
+          colorScheme === "dark" && styles.darkContainer,
         ]}
       >
         <Text
+          style={[styles.heading, colorScheme === "dark" && styles.darkHeading]}
+        >
+          Category: {categoryName}
+        </Text>
+
+        <View
           style={[
-            styles.descriptionText,
-            colorScheme === "dark" && styles.darkDescriptionText,
+            styles.descriptionBox,
+            colorScheme === "dark" && styles.darkDescriptionBox,
           ]}
         >
-          {currentWord.description}
-        </Text>
-      </View>
-
-      {!wordGuessedCorrectly && (
-        <>
-          <View style={styles.letterInputContainer}>
-            {letterInputs.map((letter, index) => (
-              <TextInput
-                key={index}
-                style={[
-                  styles.letterInput,
-                  colorScheme === "dark" && styles.darkLetterInput,
-                ]}
-                value={letter}
-                onChangeText={(value) => handleLetterInput(value, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                maxLength={1}
-                ref={(el) => (inputRefs.current[index] = el)}
-              />
-            ))}
-          </View>
-
-          {/* Submit Guess Button */}
-          <Pressable style={styles.button} onPress={checkWord}>
-            <Text style={styles.buttonText}>Submit Guess</Text>
-          </Pressable>
-
-          {/* Hint Button */}
-          <Pressable
-            style={[
-              styles.button,
-              {
-                backgroundColor: emptyIndices.length === 0 ? "#aaa" : "#10b981",
-              },
-            ]}
-            onPress={giveHint}
-            disabled={emptyIndices.length === 0} // Disable when no empty boxes
-          >
-            <Text style={styles.buttonText}>Hint</Text>
-          </Pressable>
-        </>
-      )}
-
-      {wordGuessedCorrectly && (
-        <Pressable style={styles.button} onPress={nextWord}>
-          <Text style={styles.buttonText}>
-            {currentWordIndex + 1 < words.length ? "Next Word" : "Finish"}
-          </Text>
-        </Pressable>
-      )}
-
-      {feedbackMessage ? (
-        <Text
-          style={[
-            styles.feedback,
-            colorScheme === "dark" && styles.darkFeedback,
-          ]}
-        >
-          {feedbackMessage}
-        </Text>
-      ) : null}
-
-      {exampleSentences.length > 0 && (
-        <View style={{ flex: 1 }}>
           <Text
             style={[
-              styles.examplesHeading,
-              colorScheme === "dark" && styles.darkExamplesHeading,
+              styles.descriptionText,
+              colorScheme === "dark" && styles.darkDescriptionText,
             ]}
           >
-            Example Sentences:
+            {currentWord.description}
           </Text>
+        </View>
 
-          <FlatList
-            data={exampleSentences}
-            keyExtractor={(item, index) => `${index}`}
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.exampleSentenceBox,
-                  colorScheme === "dark" && styles.darkExampleSentenceBox,
-                ]}
-              >
-                <Text
+        {!wordGuessedCorrectly && (
+          <>
+            <View style={styles.letterInputContainer}>
+              {letterInputs.map((letter, index) => (
+                <TextInput
+                  key={index}
                   style={[
-                    styles.exampleSentence,
-                    colorScheme === "dark" && styles.darkExampleSentence,
+                    styles.letterInput,
+                    disabledInputs[index] && styles.disabledLetterInput, // Apply disabled style
+                    colorScheme === "dark" && styles.darkLetterInput,
+                  ]}
+                  value={letter}
+                  onChangeText={(value) => handleLetterInput(value, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
+                  maxLength={1}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  editable={!disabledInputs[index]} // Disable input if hint is filled
+                />
+              ))}
+            </View>
+
+            {/* Buttons Section */}
+            <View style={styles.buttonRow}>
+              {/* Submit Guess Button */}
+              <Pressable style={styles.button} onPress={checkWord}>
+                <Text style={styles.buttonText}>Submit Guess</Text>
+              </Pressable>
+
+              {/* Hint Button */}
+              <Pressable
+                style={[
+                  styles.hintButton,
+                  {
+                    backgroundColor:
+                      emptyIndices.length === 0 ? "#aaa" : "#3498db",
+                  },
+                ]}
+                onPress={giveHint}
+                disabled={emptyIndices.length === 0}
+              >
+                <Ionicons name="help-circle-outline" size={24} color="white" />
+                <Text style={styles.hintButtonText}>Hint</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+
+        {wordGuessedCorrectly && (
+          <Pressable style={styles.button} onPress={nextWord}>
+            <Text style={styles.buttonText}>
+              {currentWordIndex + 1 < words.length ? "Next Word" : "Finish"}
+            </Text>
+          </Pressable>
+        )}
+
+        {feedbackMessage ? (
+          <Text
+            style={[
+              styles.feedback,
+              colorScheme === "dark" && styles.darkFeedback,
+            ]}
+          >
+            {feedbackMessage}
+          </Text>
+        ) : null}
+
+        {exampleSentences.length > 0 && (
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[
+                styles.examplesHeading,
+                colorScheme === "dark" && styles.darkExamplesHeading,
+              ]}
+            >
+              Example Sentences:
+            </Text>
+
+            <FlatList
+              data={exampleSentences}
+              keyExtractor={(item, index) => `${index}`}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.exampleSentenceBox,
+                    colorScheme === "dark" && styles.darkExampleSentenceBox,
                   ]}
                 >
-                  {item.sentence}
-                </Text>
-              </View>
-            )}
-            contentContainerStyle={{ paddingBottom: 24 }}
-          />
-        </View>
-      )}
-    </View>
+                  <Text
+                    style={[
+                      styles.exampleSentence,
+                      colorScheme === "dark" && styles.darkExampleSentence,
+                    ]}
+                  >
+                    {item.sentence}
+                  </Text>
+                </View>
+              )}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            />
+          </View>
+        )}
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -612,5 +637,33 @@ const styles = StyleSheet.create({
   },
   darkExampleSentence: {
     color: "#ddd",
+  },
+  hintButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#3498db",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 9999,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  hintButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+  disabledLetterInput: {
+    backgroundColor: "#d1d5db",
+    color: "#888",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 32,
+    marginBottom: 16,
   },
 });

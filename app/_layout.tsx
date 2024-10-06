@@ -5,7 +5,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack, useRouter } from "expo-router"; // Import `useRouter` for navigation
+import { Stack, useRouter, useNavigation } from "expo-router"; // Import `useRouter` for navigation
 import * as SplashScreen from "expo-splash-screen";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Pressable, View, Alert } from "react-native"; // Import Alert
@@ -19,6 +19,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const navigation = useNavigation<any>();
   const [user, setUser] = useState<any>(null);
 
   const [loaded] = useFonts({
@@ -67,8 +68,10 @@ export default function RootLayout() {
       // Clear the user state and redirect to the home page
       setUser(null);
 
-      // Use router.replace() to ensure the user can't go back to previous pages after logout
-      router.replace("/"); // Replace the current page with home page
+      navigation.resetRoot({
+        index: 0,
+        routes: [{ name: "index" }], // Replace the current stack with the home page
+      });
     } catch (error) {
       console.error("Error during sign out:", error);
     }

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "english-app",
+    "name": "WORD EN",
     "slug": "english-app",
-    "version": "1.0.6",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "com.googleusercontent.apps.691183788881-nv7eq9g5nb0ijj61haa8cf6nn2v2c4b4",
@@ -15,9 +15,9 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "googleServicesFile": "./client_691183788881-nv7eq9g5nb0ijj61haa8cf6nn2v2c4b4.apps.googleusercontent.com.plist",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.anonymous.englishapp",
-      "buildNumber": "7"
+      "buildNumber": "9"
     },
     "android": {
       "adaptiveIcon": {

@@ -22,7 +22,6 @@ export default function Auth() {
         try {
           await GoogleSignin.hasPlayServices();
           const userInfo = await GoogleSignin.signIn();
-          console.log("Google Sign In:", userInfo.data?.idToken);
 
           if (userInfo.data?.idToken) {
             // Supabase ile oturum açma işlemi
@@ -30,17 +29,13 @@ export default function Auth() {
               provider: "google",
               token: userInfo.data?.idToken,
             });
-            console.log("Supabase Sign In:", error, data);
           } else {
             throw new Error("No ID token present!");
           }
         } catch (error: any) {
           if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-            console.log("User cancelled the login flow");
           } else if (error.code === statusCodes.IN_PROGRESS) {
-            console.log("Sign in is in progress");
           } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-            console.log("Play services not available or outdated");
           } else {
             console.error("Something went wrong:", error);
           }

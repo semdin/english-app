@@ -6,17 +6,17 @@ import {
   Image,
   StyleSheet,
   useColorScheme,
-} from "react-native"; // Add useColorScheme here
+} from "react-native";
 import { useRouter } from "expo-router";
 import Auth from "../components/Auth";
 import { supabase } from "../lib/supabase";
 import { StatusBar } from "expo-status-bar";
-import { GoogleSignin } from "@react-native-google-signin/google-signin"; // Import Google Signin
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 export default function StartGameScreen() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const colorScheme = useColorScheme(); // Get current theme
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     const getSession = async () => {
@@ -56,10 +56,7 @@ export default function StartGameScreen() {
 
   return (
     <View
-      style={[
-        styles.container,
-        colorScheme === "dark" && styles.darkContainer, // Apply dark theme styling
-      ]}
+      style={[styles.container, colorScheme === "dark" && styles.darkContainer]}
     >
       <Image
         source={require("../assets/images/logo.png")}
@@ -67,22 +64,16 @@ export default function StartGameScreen() {
         resizeMode="contain"
       />
 
-      <Text
-        style={[
-          styles.title,
-          colorScheme === "dark" && styles.darkTitle, // Apply dark theme text color
-        ]}
-      >
-        Word Game
+      <Text style={[styles.title, colorScheme === "dark" && styles.darkTitle]}>
+        WORD-EN
       </Text>
 
       <Text
-        style={[
-          styles.subtitle,
-          colorScheme === "dark" && styles.darkSubtitle, // Apply dark theme subtitle color
-        ]}
+        style={[styles.subtitle, colorScheme === "dark" && styles.darkSubtitle]}
       >
-        Test your vocabulary! Sign in to start.
+        {user
+          ? "Ready to test your skills? Let's start!"
+          : "Test your vocabulary! Sign in to start."}
       </Text>
 
       {user ? (
@@ -99,10 +90,10 @@ export default function StartGameScreen() {
             <Text
               style={[
                 styles.welcomeText,
-                colorScheme === "dark" && styles.darkWelcomeText, // Apply dark theme text color
+                colorScheme === "dark" && styles.darkWelcomeText,
               ]}
             >
-              Welcome, {user?.user_metadata?.full_name || "User"}!
+              Welcome, {user?.user_metadata?.full_name || "Player"}!
             </Text>
 
             <Pressable style={styles.signOutButton} onPress={signOut}>
@@ -118,7 +109,7 @@ export default function StartGameScreen() {
           <Auth />
         </>
       )}
-      <StatusBar style="auto" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
     </View>
   );
 }
@@ -132,10 +123,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   darkContainer: {
-    backgroundColor: "#121212", // Dark background color
-  },
-  lightContainer: {
-    backgroundColor: "#f5f5f5", // Light theme background color
+    backgroundColor: "#121212",
   },
   logo: {
     width: 150,
@@ -150,7 +138,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   darkTitle: {
-    color: "#fff", // Light text for dark theme
+    color: "#fff",
   },
   subtitle: {
     fontSize: 18,
@@ -159,7 +147,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   darkSubtitle: {
-    color: "#d1d5db", // Lighter subtitle text for dark theme
+    color: "#d1d5db",
   },
   button: {
     backgroundColor: "#1e40af",
@@ -192,7 +180,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   darkWelcomeText: {
-    color: "#fff", // Light text for dark theme
+    color: "#fff",
   },
   signOutButton: {
     marginTop: 16,

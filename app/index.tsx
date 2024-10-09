@@ -103,9 +103,6 @@ export default function StartGameScreen() {
         </>
       ) : (
         <>
-          <Text style={{ marginTop: 32, marginBottom: 16 }}>
-            Or sign in with:
-          </Text>
           <Auth />
         </>
       )}

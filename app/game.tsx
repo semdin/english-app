@@ -8,18 +8,19 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  TouchableWithoutFeedback, // Import TouchableWithoutFeedback
-  Keyboard, // Import Keyboard
+  TouchableWithoutFeedback,
+  Keyboard,
   useColorScheme,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
-import { supabase } from "../lib/supabase";
+import { supabase } from "@/lib/supabase";
+import WordsInformation from "@/components/WordsInformation";
 
 export default function GameScreen() {
   const { categoryId, categoryName } = useLocalSearchParams();
   const router = useRouter();
-  const colorScheme = useColorScheme(); // Detect theme
+  const colorScheme = useColorScheme();
 
   interface Word {
     id: number;
@@ -29,8 +30,8 @@ export default function GameScreen() {
 
   const [words, setWords] = useState<Word[]>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [letterInputs, setLetterInputs] = useState<string[]>([]);
-  const [disabledInputs, setDisabledInputs] = useState<boolean[]>([]);
+  const [letterInputs, setLetterInputs] = useState<string[][]>([]);
+  const [disabledInputs, setDisabledInputs] = useState<boolean[][]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [wordGuessedCorrectly, setWordGuessedCorrectly] = useState(false);
   const [categoryCompleted, setCategoryCompleted] = useState(false);
@@ -120,8 +121,15 @@ export default function GameScreen() {
   useEffect(() => {
     if (words.length > 0) {
       const currentWord = words[currentWordIndex];
-      setLetterInputs(Array(currentWord.word.length).fill(""));
-      setDisabledInputs(Array(currentWord.word.length).fill(false)); // Initialize disabled states
+      const wordParts = currentWord.word.split(" ");
+      const initialLetterInputs = wordParts.map((word) =>
+        Array(word.length).fill("")
+      );
+      const initialDisabledInputs = wordParts.map((word) =>
+        Array(word.length).fill(false)
+      );
+      setLetterInputs(initialLetterInputs);
+      setDisabledInputs(initialDisabledInputs);
     }
   }, [currentWordIndex, words]);
 
@@ -140,9 +148,33 @@ export default function GameScreen() {
     }
   };
 
+  const getOverallIndex = (wordIndex: number, letterIndex: number) => {
+    let index = 0;
+    for (let i = 0; i < wordIndex; i++) {
+      index += letterInputs[i].length;
+    }
+    index += letterIndex;
+    return index;
+  };
+
+  const getWordLetterIndex = (overallIndex: number) => {
+    let index = 0;
+    for (let wordIndex = 0; wordIndex < letterInputs.length; wordIndex++) {
+      const wordLength = letterInputs[wordIndex].length;
+      if (overallIndex < index + wordLength) {
+        return { wordIndex, letterIndex: overallIndex - index };
+      }
+      index += wordLength;
+    }
+    throw new Error("Index out of bounds");
+  };
+
   const checkWord = () => {
     const currentWord = words[currentWordIndex];
-    const userGuess = letterInputs.join("").toLowerCase();
+    const userGuess = letterInputs
+      .map((wordLetters) => wordLetters.join(""))
+      .join(" ")
+      .toLowerCase();
     if (userGuess === currentWord.word.toLowerCase()) {
       setFeedbackMessage("Correct! Well done.");
       setWordGuessedCorrectly(true);
@@ -196,10 +228,6 @@ export default function GameScreen() {
   const nextWord = () => {
     if (currentWordIndex + 1 < words.length) {
       setCurrentWordIndex(currentWordIndex + 1);
-      setLetterInputs(Array(words[currentWordIndex + 1].word.length).fill(""));
-      setDisabledInputs(
-        Array(words[currentWordIndex + 1].word.length).fill(false)
-      ); // Reset disabled inputs
       setFeedbackMessage("");
       setExampleSentences([]);
       setWordGuessedCorrectly(false);
@@ -222,47 +250,68 @@ export default function GameScreen() {
     }
   };
 
-  const handleLetterInput = (value: string, index: number) => {
-    if (disabledInputs[index]) return; // Prevent input in disabled fields
+  const handleLetterInput = (
+    value: string,
+    wordIndex: number,
+    letterIndex: number
+  ) => {
+    if (disabledInputs[wordIndex][letterIndex]) return;
     const updatedInputs = [...letterInputs];
-    updatedInputs[index] = value.toUpperCase(); // Force uppercase
+    updatedInputs[wordIndex][letterIndex] = value.toUpperCase();
     setLetterInputs(updatedInputs);
 
-    if (value.length === 1 && index < letterInputs.length - 1) {
-      inputRefs.current[index + 1]?.focus();
+    if (value.length === 1) {
+      const currentOverallIndex = getOverallIndex(wordIndex, letterIndex);
+      const nextOverallIndex = currentOverallIndex + 1;
+      const totalLetters = letterInputs.flat().length;
+      if (nextOverallIndex < totalLetters) {
+        inputRefs.current[nextOverallIndex]?.focus();
+      }
     }
   };
 
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace" && letterInputs[index] === "") {
-      if (index > 0) {
-        inputRefs.current[index - 1]?.focus();
+  const handleKeyPress = (e: any, wordIndex: number, letterIndex: number) => {
+    if (
+      e.nativeEvent.key === "Backspace" &&
+      letterInputs[wordIndex][letterIndex] === ""
+    ) {
+      const currentOverallIndex = getOverallIndex(wordIndex, letterIndex);
+      const prevOverallIndex = currentOverallIndex - 1;
+      if (prevOverallIndex >= 0) {
+        inputRefs.current[prevOverallIndex]?.focus();
       }
     }
   };
 
   const giveHint = () => {
-    const currentWord = words[currentWordIndex].word.split("");
-    const emptyIndices = letterInputs
-      .map((letter, index) => (letter === "" ? index : null))
+    const currentWordLetters = currentWord.word.replace(/\s/g, "").split("");
+    const flatLetterInputs = letterInputs.flat();
+    const flatDisabledInputs = disabledInputs.flat();
+
+    const emptyIndices = flatLetterInputs
+      .map((letter, index) =>
+        letter === "" && !flatDisabledInputs[index] ? index : null
+      )
       .filter((index) => index !== null);
 
     if (emptyIndices.length > 0) {
       const randomIndex =
-        emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
-      const updatedInputs = [...letterInputs];
-      const updatedDisabled = [...disabledInputs];
+        emptyIndices[Math.floor(Math.random() * emptyIndices.length)]!;
+      const { wordIndex, letterIndex } = getWordLetterIndex(randomIndex);
+      const letter = currentWordLetters[randomIndex].toUpperCase();
 
-      updatedInputs[randomIndex!] = currentWord[randomIndex!].toUpperCase(); // Fill hint in uppercase
-      updatedDisabled[randomIndex!] = true; // Disable the hint input
+      const updatedLetterInputs = [...letterInputs];
+      updatedLetterInputs[wordIndex][letterIndex] = letter;
+      setLetterInputs(updatedLetterInputs);
 
-      setLetterInputs(updatedInputs);
-      setDisabledInputs(updatedDisabled);
+      const updatedDisabledInputs = [...disabledInputs];
+      updatedDisabledInputs[wordIndex][letterIndex] = true;
+      setDisabledInputs(updatedDisabledInputs);
     }
   };
 
-  // Define emptyIndices inside the render logic for disabling the button
   const emptyIndices = letterInputs
+    .flat()
     .map((letter, index) => (letter === "" ? index : null))
     .filter((index) => index !== null);
 
@@ -271,7 +320,7 @@ export default function GameScreen() {
       <View
         style={[
           styles.container,
-          colorScheme === "dark" ? styles.darkContainer : styles.lightContainer, // Dynamically change background
+          colorScheme === "dark" ? styles.darkContainer : styles.lightContainer,
         ]}
       >
         <ActivityIndicator size="large" color="#1e40af" />
@@ -291,7 +340,7 @@ export default function GameScreen() {
 
       if (error) throw error;
 
-      setCurrentWordIndex(0); // Reset the current word index to the beginning
+      setCurrentWordIndex(0);
       setFeedbackMessage("");
       setWordGuessedCorrectly(false);
 
@@ -302,7 +351,6 @@ export default function GameScreen() {
           {
             text: "OK",
             onPress: () => {
-              // Pop the current screen and push it back to reset it
               navigation.pop();
               navigation.push("game", { categoryId, categoryName });
             },
@@ -357,7 +405,6 @@ export default function GameScreen() {
           <Text style={styles.buttonText}>View Word List</Text>
         </Pressable>
 
-        {/* Play Again Button */}
         <Pressable style={styles.button} onPress={handlePlayAgain}>
           <Text style={styles.buttonText}>Play Again</Text>
         </Pressable>
@@ -414,35 +461,54 @@ export default function GameScreen() {
           </Text>
         </View>
 
+        <WordsInformation word={currentWord.word} colorScheme={colorScheme} />
+
         {!wordGuessedCorrectly && (
           <>
             <View style={styles.letterInputContainer}>
-              {letterInputs.map((letter, index) => (
-                <TextInput
-                  key={index}
-                  style={[
-                    styles.letterInput,
-                    disabledInputs[index] && styles.disabledLetterInput, // Apply disabled style
-                    colorScheme === "dark" && styles.darkLetterInput,
-                  ]}
-                  value={letter}
-                  onChangeText={(value) => handleLetterInput(value, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  maxLength={1}
-                  ref={(el) => (inputRefs.current[index] = el)}
-                  editable={!disabledInputs[index]} // Disable input if hint is filled
-                />
-              ))}
+              {(() => {
+                let indexOffset = 0;
+                return letterInputs.map((wordLetters, wordIndex) => {
+                  const wordLength = wordLetters.length;
+                  const wordView = (
+                    <View key={wordIndex} style={styles.wordRow}>
+                      {wordLetters.map((letter, letterIndex) => {
+                        const overallIndex = indexOffset + letterIndex;
+                        return (
+                          <TextInput
+                            key={letterIndex}
+                            style={[
+                              styles.letterInput,
+                              disabledInputs[wordIndex][letterIndex] &&
+                                styles.disabledLetterInput,
+                              colorScheme === "dark" && styles.darkLetterInput,
+                            ]}
+                            value={letter}
+                            onChangeText={(value) =>
+                              handleLetterInput(value, wordIndex, letterIndex)
+                            }
+                            onKeyPress={(e) =>
+                              handleKeyPress(e, wordIndex, letterIndex)
+                            }
+                            maxLength={1}
+                            ref={(el) => (inputRefs.current[overallIndex] = el)}
+                            editable={!disabledInputs[wordIndex][letterIndex]}
+                          />
+                        );
+                      })}
+                    </View>
+                  );
+                  indexOffset += wordLength;
+                  return wordView;
+                });
+              })()}
             </View>
 
-            {/* Buttons Section */}
             <View style={styles.buttonRow}>
-              {/* Submit Guess Button */}
               <Pressable style={styles.button} onPress={checkWord}>
                 <Text style={styles.buttonText}>Submit Guess</Text>
               </Pressable>
 
-              {/* Hint Button */}
               <Pressable
                 style={[
                   styles.hintButton,
@@ -665,5 +731,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 32,
     marginBottom: 16,
+  },
+  wordRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginBottom: 8,
   },
 });

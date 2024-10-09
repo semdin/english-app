@@ -115,7 +115,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.0"
+        versionName "1.0.9"
     }
     signingConfigs {
         debug {
@@ -193,8 +193,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-
-    implementation('com.google.android.gms:play-services-auth:20.7.0')
 }
 
 if (rnVersion < versionToNumber(0, 75, 0)) {
